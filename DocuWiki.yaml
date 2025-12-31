@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Deploy an Ubuntu EC2 Instance with a DokuWiki Boot Script using docusignv1 key'
+
+Resources:
+  # Security Group to allow Web and SSH traffic
+  WikiSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP (80) and SSH (22)
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  # The EC2 Instance
+  DokuWikiServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      # Standard Ubuntu 22.04 LTS AMI for us-east-1
+      ImageId: ami-0c7217cdde317cfec 
+      # Reference your key pair name here
+      KeyName: docusignv1
+      SecurityGroups:
+        - !Ref WikiSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          ## SET GLOBAL VARIABLES
+          SITE_DIR="/var/www/html"
+          SITE_DOCU="my_wiki"
+          WIKI_DATA="/var/www/html/my_wiki/data/pages"
+
+          # Update and Install Dependencies
+          apt-get update -y
+          apt-get install -y apache2 php libapache2-mod-php php-xml php-mbstring php-zip php-intl php-gd
+
+          # Start and Enable Apache
+          systemctl start apache2
+          systemctl enable apache2
+
+          ## Prepare Directory
+          mkdir -p "$SITE_DIR/$SITE_DOCU"
+          cd "$SITE_DIR/$SITE_DOCU"
+
+          ## Download and extract DokuWiki
+          wget https://download.dokuwiki.org/src/dokuwiki/dokuwiki-stable.tgz
+          tar xzf dokuwiki-stable.tgz --strip-components=1
+          rm dokuwiki-stable.tgz
+          
+          ## Cleanup and Permissions
+          chown -R www-data:www-data "$SITE_DIR/$SITE_DOCU"
+
+          ## Create Initial Pages
+          mkdir -p "$WIKI_DATA"
+          echo '================   **Home Page** ====================' > "$WIKI_DATA/home.txt"
+          echo 'Welcome to my Docuwiki' >> "$WIKI_DATA/home.txt"
+
+          echo '================   **AWS Notes** ====================' > "$WIKI_DATA/aws_notes.txt"
+          echo 'Here are some helpful notes about AWS services' >> "$WIKI_DATA/aws_notes.txt"
+          echo 'An AWS EC2 instance is a virtual server in the cloud.' >> "$WIKI_DATA/aws_notes.txt"
+          echo 'An AWS S3 Bucket is a public cloud storage resource.' >> "$WIKI_DATA/aws_notes.txt"
+          echo 'AWS IAM is a web service that helps you securely control access.' >> "$WIKI_DATA/aws_notes.txt"
+
+          echo '================   **Linux Commands** ====================' > "$WIKI_DATA/linux_commands.txt"
+          echo 'Here is a cheatsheet to help with Linux Commands' >> "$WIKI_DATA/linux_commands.txt"
+          echo '**CD** = Change Directory' >> "$WIKI_DATA/linux_commands.txt"
+          echo '**MKDIR** = Make Directory' >> "$WIKI_DATA/linux_commands.txt"
+          echo '**PWD** = Print Working Directory' >> "$WIKI_DATA/linux_commands.txt"
+          echo '**LS** = List Contents in a Directory' >> "$WIKI_DATA/linux_commands.txt"
+          echo '**Touch** = Creates a file' >> "$WIKI_DATA/linux_commands.txt"
+
+Outputs:
+  WikiURL:
+    Description: URL to access the DokuWiki installer
+    Value: !Sub 'http://${DokuWikiServer.PublicIp}/my_wiki/install.php'
